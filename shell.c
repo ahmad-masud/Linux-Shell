@@ -148,6 +148,24 @@ int checkInternal(char* tokens[]){
 		}
 		return 1;
 	}
+	else if (strcmp(tokens[0],"help")==0){
+		if (strcmp(tokens[1],"exit")==0){
+			write(STDOUT_FILENO, "'cd'",strlen("Too many arguments"));
+			write(STDOUT_FILENO, "\n", strlen("\n"));
+		}
+		else if (strcmp(tokens[1],"pwd")==0){
+			write(STDOUT_FILENO, "Too many arguments",strlen("Too many arguments"));
+			write(STDOUT_FILENO, "\n", strlen("\n"));
+		}
+		
+		else if (strcmp(tokens[1],"cd")==0){
+			write(STDOUT_FILENO, "Too many arguments",strlen("Too many arguments"));
+			write(STDOUT_FILENO, "\n", strlen("\n"));
+		}
+		else if (){
+
+		}
+	}
 
 	//got to end and no internal commands were sent, return -1 to tell shell to fork
 	return -1;
