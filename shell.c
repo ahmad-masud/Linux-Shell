@@ -100,6 +100,59 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
  * Main and Execute Commands
  */
 
+//Create function for forking and internal commands for organization
+int checkInternal(char* tokens[]){
+	//Shell prompt and internal commands
+	if (strcmp(tokens[0],"exit")==0){
+		if (tokens[1]==NULL){
+			exit(EXIT_SUCCESS);
+		}
+		else { //provided extra args
+			write(STDOUT_FILENO, "Too many arguments",strlen("Too many arguments"));
+			write(STDOUT_FILENO, "\n", strlen("\n"));
+		}
+		//1 means there was an internal command end current iter of loop
+		return 1;
+	}
+	else if (strcmp(tokens[0],"pwd")==0){
+		if (tokens[1]==NULL) {// check if args
+			char buf[256];
+			if (getcwd(buf,sizeof(buf)) != NULL ){
+				write(STDOUT_FILENO,buf,strlen(buf));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+			}
+			else {
+				write(STDOUT_FILENO,"getcwd Failed", strlen("getcwd Failed"));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+			}
+		}
+		else { //provided extra args
+			write(STDOUT_FILENO, "Too many arguments",strlen("Too many arguments"));
+			write(STDOUT_FILENO, "\n", strlen("\n"));
+		}
+		return 1;
+	}
+	else if (strcmp(tokens[0],"cd")==0){
+		if (tokens[2]==NULL){
+			if (chdir(tokens[1])!=-1){ // checking for error in chdir
+				//do nothing
+			}
+			else {
+				write(STDOUT_FILENO,"Error changing directory", strlen("Error changing directory"));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+			}
+		}
+		else { //provided extra args
+			write(STDOUT_FILENO, "Too many arguments",strlen("Too many arguments"));
+			write(STDOUT_FILENO, "\n", strlen("\n"));
+		}
+		return 1;
+	}
+
+	//got to end and no internal commands were sent, return -1 to tell shell to fork
+	return -1;
+}
+
 int main(int argc, char* argv[])
 {
 	char input_buffer[COMMAND_LENGTH];
@@ -132,25 +185,33 @@ int main(int argc, char* argv[])
 		 *    read_command() again immediately.
 		 */
 
-		int var_pid;
-		int status;
-		var_pid = fork();
+		if (checkInternal(tokens)==1){
+			continue;
+		}
+		else {
+			int var_pid;
+			int status;
+			var_pid = fork();
 
-		if(var_pid<0){
-			fprintf(stderr,"fork Failed");
-			exit(-1);
-		}
-		else if (var_pid==0) { //in child process;
-			execvp(tokens[0],tokens);
-		}
-		else { //parent process
-			if(!in_background){
-				waitpid(0,&status,WNOHANG);
+			if(var_pid<0){
+				fprintf(stderr,"fork Failed");
+				exit(-1);
 			}
-			printf("Child %d completed",var_pid);
+			else if (var_pid==0) { //in child process;
+				if (execvp(tokens[0],tokens) < 0){
+					write(STDERR_FILENO,"Error type ", strlen("Error type"));
+					exit(-1);
+				}
+			}
+			else { //parent process 
+				//check if need to wait
+				if(!in_background){
+					waitpid(var_pid,&status,0);
+				}
+			}
+			//clean up zombie
+			while (waitpid(-1,NULL,WNOHANG) > 0);
 		}
-
-
 	}
 	return 0;
 }
