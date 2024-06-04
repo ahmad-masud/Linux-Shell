@@ -171,7 +171,6 @@ int main(int argc, char* argv[]) {
 	char cwd[256];
 
 	while (true) {
-
 		// Get command
 		// Use write because we need to use read() to work with
 		// signals, and read() is incompatible with printf().
@@ -212,12 +211,12 @@ int main(int argc, char* argv[]) {
 
 			if(var_pid < 0) { // error
 				fprintf(stderr, "fork Failed");
-				exit(-1);
+				exit(EXIT_FAILURE);
 			}
 			else if (var_pid==0) { // Child process;
 				if (execvp(tokens[0], tokens) < 0){
 					write(STDERR_FILENO, "Error type ", strlen("Error type"));
-					exit(-1);
+					exit(EXIT_FAILURE);
 				}
 			}
 			else { // Parent process 
