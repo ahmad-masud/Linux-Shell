@@ -168,12 +168,21 @@ int checkInternal(char* tokens[]) {
 int main(int argc, char* argv[]) {
 	char input_buffer[COMMAND_LENGTH];
 	char *tokens[NUM_TOKENS];
+	char cwd[256];
+
 	while (true) {
 
 		// Get command
 		// Use write because we need to use read() to work with
 		// signals, and read() is incompatible with printf().
-		write(STDOUT_FILENO, "$ ", strlen("$ "));
+		if (getcwd(cwd, sizeof(cwd)) != NULL) {
+			char temp[258];
+			snprintf(temp, sizeof(temp), "%s$ ", cwd);
+			write(STDOUT_FILENO, temp, strlen(temp));
+        } else {
+			write(STDERR_FILENO, "getcwd() error", strlen("getcwd() error"));
+            exit(EXIT_FAILURE);
+        }
 		_Bool in_background = false;
 		read_command(input_buffer, tokens, &in_background);
 
