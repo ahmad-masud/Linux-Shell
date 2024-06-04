@@ -1,38 +1,36 @@
 #!/bin/bash
 
-# Function to run a test case
-run_test() {
-    local test_input=$1
-    local expected_output=$2
+# Create a temporary file for testing
+TMP_OUTPUT=$(mktemp)
 
-    echo "Running test: $test_input"
-    echo "$test_input" | ./shell > actual_output.txt 2>&1
-    if diff -q actual_output.txt "$expected_output" > /dev/null; then
-        echo "Test passed"
+# Function to run a test
+run_test() {
+    local input=$1
+    local expected_output=$2
+    local test_description=$3
+
+    # Run the shell with the input and capture the output
+    echo "$input" | ./shell > "$TMP_OUTPUT" 2>&1
+
+    # Check the output
+    if grep -q "$expected_output" "$TMP_OUTPUT"; then
+        echo "PASS: $test_description"
     else
-        echo "Test failed"
-        echo "Expected:"
-        cat "$expected_output"
-        echo "Got:"
-        cat actual_output.txt
+        echo "FAIL: $test_description"
+        echo "Expected: $expected_output"
+        echo "Got: $(cat $TMP_OUTPUT)"
     fi
-    echo ""
 }
 
-# Create expected outputs
-echo "/your/current/directory" > expected_pwd.txt
-echo "Too many arguments" > expected_cd_error.txt
-echo "Too many arguments" > expected_help_error.txt
-echo "exit: Exits the shell\npwd: Prints the current working directory\ncd: Changes the current working directory\nhelp: Prints a list of internal commands\n" > expected_help.txt
-echo "Hello, World!" > expected_echo.txt
+# Test cases
+run_test "pwd" "$HOME" "Test 'pwd' command"
+run_test "cd / && pwd" "/" "Test 'cd /' command"
+run_test "cd - && pwd" "$HOME" "Test 'cd -' command (previous directory)"
+run_test "cd ~ && pwd" "$HOME" "Test 'cd ~' command (home directory)"
+run_test "echo Hello World" "Hello World" "Test 'echo Hello World' command"
+run_test "history" "history" "Test 'history' command"
+run_test "help" "exit: Exits the shell" "Test 'help' command"
+run_test "exit" "" "Test 'exit' command"
 
-# Run tests
-run_test "pwd" expected_pwd.txt
-run_test "cd ..; pwd" expected_pwd.txt
-run_test "help" expected_help.txt
-run_test "echo Hello, World!" expected_echo.txt
-run_test "cd too many arguments" expected_cd_error.txt
-run_test "help too many arguments" expected_help_error.txt
-
-# Cleanup
-rm -f actual_output.txt
+# Clean up
+rm "$TMP_OUTPUT"

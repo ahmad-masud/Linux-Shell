@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <ctype.h>
+#include <pwd.h>
 
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
@@ -17,6 +18,8 @@
 char history[HISTORY_DEPTH][COMMAND_LENGTH];
 int history_count = 0;
 int history_length = 0;
+char prevDir[COMMAND_LENGTH];
+
 /**
  * Command Input and Processing
  */
@@ -182,13 +185,63 @@ int checkInternal(char* tokens[]) {
 		}
 		return 1;
 	} else if (strcmp(tokens[0], "cd") == 0) {
-		if (tokens[2] == NULL) {
-			if (chdir(tokens[1]) != -1) { // Checking for error in chdir
-				// Do nothing
-			} else {
+		char* path = tokens[1];
+		// Check if path is empty or ~ and change to home
+		if (path == NULL || strcmp(path, "~") == 0) {
+			char* homedir = getenv("HOME");
+			if (homedir == NULL) {
+				struct passwd* pwd = getpwuid(getuid());
+				if (pwd != NULL) {
+					homedir = pwd->pw_dir;
+				}
+			} if (homedir != NULL) {
+				// Try to get prevDir before calling chdir
+				if (getcwd(prevDir, sizeof(prevDir)) == NULL) {
+					write(STDOUT_FILENO, "getcwd failed for prevDir\n", strlen("getcwd failed for prevDir\n"));
+				} 
+				if (chdir(homedir) != 0) {
+					write(STDOUT_FILENO, "chdir to home directory failed\n", strlen("chdir to home directory failed\n"));
+				}
+			}
+		} else if (strcmp(path,"-") == 0) {
+			// Also need to get prev dir incase cd - is called again
+			char newPrev[COMMAND_LENGTH];
+			strcpy(newPrev,prevDir);
+			if (getcwd(prevDir,sizeof(prevDir)) == NULL) {
+				write(STDOUT_FILENO, "getcwd failed for prevDir\n", strlen("getcwd failed for prevDir\n"));
+			} 
+			if (chdir(newPrev) != 0) {
+				write(STDOUT_FILENO, "chdir to prev directory failed\n", strlen("chdir to prev directory failed\n"));
+			}
+		}
+		// If we get here it means we have a path to cd to
+		else if (tokens[2] == NULL) {
+			// Try to get prevDir before calling chdir
+			if (getcwd(prevDir,sizeof(prevDir)) == NULL) {
+				write(STDOUT_FILENO, "getcwd failed for prevDir\n", strlen("getcwd failed for prevDir\n"));
+			}
+			if (path[0] == '~') {
+				char* homedir = getenv("HOME");
+				if (homedir == NULL) {
+					struct passwd* pwd = getpwuid(getuid());
+					if (pwd != NULL) {
+						homedir = pwd->pw_dir;
+					}
+				}
+				if (homedir != NULL) {
+					// Create new path with home dir
+					char new_path[COMMAND_LENGTH];
+					snprintf(new_path, sizeof(new_path), "%s%s", homedir, path+1);
+					if (chdir(new_path) != 0) {
+						write(STDOUT_FILENO, "Error changing directory with ~\n", strlen("Error changing directory with ~\n"));
+					}
+				} else { // Home dir not found
+					write(STDOUT_FILENO, "Unable to find home directory\n", strlen("Unable to find home directory\n"));
+				}
+			} else if (chdir(tokens[1]) != 0) { // Checking if path is legal and ~ wasn't used
 				write(STDOUT_FILENO, "Error changing directory\n", strlen("Error changing directory\n"));
 			}
-		} else { // Provided extra args
+		} else { //provided extra args
 			write(STDOUT_FILENO, "Too many arguments\n", strlen("Too many arguments\n"));
 		}
 		return 1;
@@ -298,18 +351,24 @@ int main(int argc, char* argv[]) {
 	char input_buffer[COMMAND_LENGTH];
 	char *tokens[NUM_TOKENS];
 
+	if (chdir(getenv("HOME")) == -1) {
+		write(STDERR_FILENO, "chdir() error\n", strlen("chdir() error\n"));
+		exit(EXIT_FAILURE);
+	}
+
 	while (true) {
 		// Get command
 		// Use write because we need to use read() to work with
 		// signals, and read() is incompatible with printf().
-		char temp[256];
-		snprintf(temp, sizeof(temp), "%s$ ", getenv("HOME"));
-		if (chdir(getenv("HOME")) != -1) {
+		char cwd[256];
+		if (getcwd(cwd, sizeof(cwd)) != NULL) {
+			char temp[258];
+			snprintf(temp, sizeof(temp), "%s$ ", cwd);
 			write(STDOUT_FILENO, temp, strlen(temp));
-		} else {
-			write(STDERR_FILENO, "chdir() error\n", strlen("chdir() error\n"));
-			exit(EXIT_FAILURE);
-		}
+        } else {
+			write(STDERR_FILENO, "getcwd() error", strlen("getcwd() error"));
+            exit(EXIT_FAILURE);
+        }
 
 		_Bool in_background = false;
 		read_command(input_buffer, tokens, &in_background, false);
