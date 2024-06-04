@@ -204,9 +204,7 @@ int main(int argc, char* argv[]) {
 		 *    read_command() again immediately.
 		 */
 
-		if (checkInternal(tokens) == 1) {
-			continue;
-		} else {
+		if (checkInternal(tokens) == -1) {
 			pid_t var_pid = fork();
 
 			if(var_pid < 0) { // error
