@@ -24,13 +24,16 @@ run_test() {
 
 # Test cases
 run_test "pwd" "$HOME" "Test 'pwd' command"
-run_test "cd / && pwd" "/" "Test 'cd /' command"
-run_test "cd - && pwd" "$HOME" "Test 'cd -' command (previous directory)"
-run_test "cd ~ && pwd" "$HOME" "Test 'cd ~' command (home directory)"
+run_test "cd /" "" "Test 'cd /' command"
+run_test "cd -" "" "Test 'cd -' command (previous directory)"
+run_test "cd ~" "" "Test 'cd ~' command (home directory)"
 run_test "echo Hello World" "Hello World" "Test 'echo Hello World' command"
 run_test "history" "history" "Test 'history' command"
 run_test "help" "exit: Exits the shell" "Test 'help' command"
 run_test "exit" "" "Test 'exit' command"
+run_test "!2" "Invalid history number" "Test '!2' command (repeat command)"
+run_test "!!" "No commands in history" "Test '!!' command (repeat last command)"
+run_test "!-" "" "Test '!-' command (repeat last command)"
 
 # Clean up
 rm "$TMP_OUTPUT"

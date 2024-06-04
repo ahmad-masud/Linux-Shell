@@ -10,6 +10,8 @@
 #include <sys/wait.h>
 #include <ctype.h>
 #include <pwd.h>
+#include <signal.h>
+#include <errno.h>
 
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
@@ -80,7 +82,7 @@ void read_command(char *buff, char *tokens[], _Bool *in_background, _Bool in_his
 	if (!in_history) {
 		int length = read(STDIN_FILENO, buff, COMMAND_LENGTH-1);
 
-		if (length < 0) {
+		if ((length < 0) && (errno != EINTR)) {
 			perror("Unable to read command from keyboard. Terminating.\n");
 			exit(-1);
 		}
@@ -347,7 +349,24 @@ int checkInternal(char* tokens[]) {
 	return -1;
 }
 
+void handle_SIGINT() {
+    // Display the help information
+	write(STDOUT_FILENO, "\nexit: Exits the shell\n", strlen("\nexit: Exits the shell\n"));
+	write(STDOUT_FILENO, "pwd: Prints the current working directory\n", strlen("pwd: Prints the current working directory\n"));
+	write(STDOUT_FILENO, "cd: Changes the current working directory\n", strlen("cd: Changes the current working directory\n"));
+	write(STDOUT_FILENO, "help: Prints a list of internal commands\n", strlen("help: Prints a list of internal commands\n"));
+	
+	exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char* argv[]) {
+	// Register the signal handler for SIGINT
+	struct sigaction handler; 
+	handler.sa_handler = handle_SIGINT; 
+	handler.sa_flags = 0; 
+	sigemptyset(&handler.sa_mask); 
+	sigaction(SIGINT, &handler, NULL);
+
 	char input_buffer[COMMAND_LENGTH];
 	char *tokens[NUM_TOKENS];
 
@@ -389,6 +408,7 @@ int main(int argc, char* argv[]) {
 			write(STDOUT_FILENO, "Run in background.\n", strlen("Run in background.\n"));
 		}
 		*/
+		
 
 		/**
 		 * Steps For Basic Shell:
