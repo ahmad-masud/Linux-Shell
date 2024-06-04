@@ -19,6 +19,9 @@ all: shell
 shell: shell.o 
 	$(CC) -o shell shell.o $(CCFLAGS)
 
+test: shell
+	./test_shell.sh
+
 clean:
 	rm -f core *.o shell 
 

@@ -1,0 +1,1 @@
+exit: Exits the shell\npwd: Prints the current working directory\ncd: Changes the current working directory\nhelp: Prints a list of internal commands\n

@@ -8,11 +8,15 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <ctype.h>
 
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
+#define HISTORY_DEPTH 10
 
-
+char history[HISTORY_DEPTH][COMMAND_LENGTH];
+int history_count = 0;
+int history_length = 0;
 /**
  * Command Input and Processing
  */
@@ -66,21 +70,23 @@ int tokenize_command(char *buff, char *tokens[]) {
  * in_background: pointer to a boolean variable. Set to true if user entered
  *       an & as their last token; otherwise set to false.
  */
-void read_command(char *buff, char *tokens[], _Bool *in_background) {
+void read_command(char *buff, char *tokens[], _Bool *in_background, _Bool in_history) {
 	*in_background = false;
 
 	// Read input
-	int length = read(STDIN_FILENO, buff, COMMAND_LENGTH-1);
+	if (!in_history) {
+		int length = read(STDIN_FILENO, buff, COMMAND_LENGTH-1);
 
-	if (length < 0) {
-		perror("Unable to read command from keyboard. Terminating.\n");
-		exit(-1);
-	}
+		if (length < 0) {
+			perror("Unable to read command from keyboard. Terminating.\n");
+			exit(-1);
+		}
 
-	// Null terminate and strip \n.
-	buff[length] = '\0';
-	if (buff[strlen(buff) - 1] == '\n') {
-		buff[strlen(buff) - 1] = '\0';
+		// Null terminate and strip \n.
+		buff[length] = '\0';
+		if (buff[strlen(buff) - 1] == '\n') {
+			buff[strlen(buff) - 1] = '\0';
+		}
 	}
 
 	// Tokenize (saving original command string)
@@ -96,9 +102,60 @@ void read_command(char *buff, char *tokens[], _Bool *in_background) {
 	}
 }
 
-/**
- * Main and Execute Commands
- */
+void addHistory(char* tokens[], _Bool in_background) {
+	if (history_length == HISTORY_DEPTH) {
+		for (int i = 0; i < HISTORY_DEPTH - 1; i++) {
+			strcpy(history[i], history[i + 1]);
+		}
+		strcpy(history[history_length-1], "");
+		for (int i = 0; tokens[i] != NULL; i++) {
+			strcat(history[history_length-1], tokens[i]);
+			if (tokens[i+1] != NULL) {
+				strcat(history[history_length-1], " ");
+			}
+		}
+		if (in_background) {
+			strcat(history[history_length-1], " &");
+		}
+	} else {
+		for (int i = 0; tokens[i] != NULL; i++) {
+			strcat(history[history_length], tokens[i]);
+			if (tokens[i+1] != NULL) {
+				strcat(history[history_length], " ");
+			}
+		}	
+		if (in_background) {
+			strcat(history[history_length], " &");
+		}
+	}
+
+	if (history_length < HISTORY_DEPTH) {
+		history_length++;
+	}
+	history_count++;
+}
+
+void checkExternal(char* tokens[], _Bool in_background) {
+	pid_t var_pid = fork();
+
+	if(var_pid < 0) { // error
+		write(STDERR_FILENO, "fork failed\n", strlen("fork failed\n"));
+		exit(EXIT_FAILURE);
+	} else if (var_pid==0) { // Child process;
+		if (execvp(tokens[0], tokens) < 0) {
+			write(STDERR_FILENO, "execvp error\n", strlen("execvp error\n"));
+			exit(EXIT_FAILURE);
+		}
+	} else { // Parent process 
+		// Check if need to wait
+		if (!in_background) {
+			waitpid(var_pid, NULL, 0);
+		} else {
+			// Clean up zombie
+			while (waitpid(-1, NULL, WNOHANG) > 0);
+		}
+	}
+}
 
 // Create function for forking and internal commands for organization
 int checkInternal(char* tokens[]) {
@@ -111,10 +168,9 @@ int checkInternal(char* tokens[]) {
 		}
 		// 1 means there was an internal command end current iter of loop
 		return 1;
-	}
-	else if (strcmp(tokens[0], "pwd") == 0) {
+	} else if (strcmp(tokens[0], "pwd") == 0) {
 		if (tokens[1] == NULL) { // Check if args
-			char buf[256];
+			char buf[COMMAND_LENGTH];
 			if (getcwd(buf, sizeof(buf)) != NULL) {
 				write(STDOUT_FILENO, buf, strlen(buf));
 				write(STDOUT_FILENO, "\n", strlen("\n"));
@@ -125,8 +181,7 @@ int checkInternal(char* tokens[]) {
 			write(STDOUT_FILENO, "Too many arguments\n", strlen("Too many arguments\n"));
 		}
 		return 1;
-	}
-	else if (strcmp(tokens[0], "cd") == 0) {
+	} else if (strcmp(tokens[0], "cd") == 0) {
 		if (tokens[2] == NULL) {
 			if (chdir(tokens[1]) != -1) { // Checking for error in chdir
 				// Do nothing
@@ -137,8 +192,7 @@ int checkInternal(char* tokens[]) {
 			write(STDOUT_FILENO, "Too many arguments\n", strlen("Too many arguments\n"));
 		}
 		return 1;
-	}
-	else if (strcmp(tokens[0], "help") == 0) {
+	} else if (strcmp(tokens[0], "help") == 0) {
 		if (tokens[1] == NULL) {
 			write(STDOUT_FILENO, "exit: Exits the shell\n", strlen("exit: Exits the shell\n"));
 			write(STDOUT_FILENO, "pwd: Prints the current working directory\n", strlen("pwd: Prints the current working directory\n"));
@@ -160,6 +214,81 @@ int checkInternal(char* tokens[]) {
 			write(STDOUT_FILENO, temp, strlen(temp));
 		}
 		return 1;
+	} else if (strcmp(tokens[0], "history") == 0) {
+		if (tokens[1] != NULL) {
+			write(STDOUT_FILENO, "Too many arguments\n", strlen("Too many arguments\n"));
+		} else {
+			for (int i = history_length - 1; i >= 0; i--) {
+				char temp[2056];
+				snprintf(temp, sizeof(temp), "%d: %s\n", history_count - history_length + i, history[i]);
+				write(STDOUT_FILENO, temp, strlen(temp));
+			}
+		}
+		return 1;
+	} else if (tokens[0][0] == '!') {
+		if (tokens[1] != NULL) {
+			write(STDOUT_FILENO, "Too many arguments\n", strlen("Too many arguments\n"));
+		} else if (tokens[0][1] == '!') {
+			if (history_length == 0) {
+				write(STDOUT_FILENO, "No commands in history\n", strlen("No commands in history\n"));
+			} else {
+				char *tokens[NUM_TOKENS];
+				_Bool in_background = false;
+
+				write(STDOUT_FILENO, history[history_length - 1], strlen(history[history_length - 1]));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+
+				read_command(history[history_length - 1], tokens, &in_background, true);
+
+				addHistory(tokens, in_background);
+
+				if (checkInternal(tokens) == -1) {
+					checkExternal(tokens, in_background);
+				}
+			}
+		} else if (tokens[0][1] == '-') {
+			if (tokens[1] != NULL) {
+				write(STDOUT_FILENO, "Too many arguments\n", strlen("Too many arguments\n"));
+			} else {
+				history_count = 0;
+				for (int i = 0; i < history_length; i++) {
+					strcpy(history[i], "");
+				}
+				history_length = 0;
+			}
+		} else {
+			int num; 
+
+			if (tokens[0][1] == '0') {
+				num = 0;
+			} else {
+				num = atoi(tokens[0] + 1);
+				if (num == 0) {
+					write(STDOUT_FILENO, "Invalid history number\n", strlen("Invalid history number\n"));
+					return 1;
+				}
+			}
+
+			if (num > history_count || num < history_count - history_length) {
+				write(STDOUT_FILENO, "Invalid history number\n", strlen("Invalid history number\n"));
+			} else {
+				char *tokens[NUM_TOKENS];
+				_Bool in_background = false;
+
+				write(STDOUT_FILENO, history[history_length - (history_count - num)], strlen(history[history_length - (history_count - num)]));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+
+				read_command(history[history_length - (history_count - num)], tokens, &in_background, true);
+
+				addHistory(tokens, in_background);
+
+				if (checkInternal(tokens) == -1) {
+					checkExternal(tokens, in_background);
+				}
+			}
+		}
+		return 1;
+	
 	}
 	// Got to end and no internal commands were sent, return -1 to tell shell to fork
 	return -1;
@@ -168,32 +297,39 @@ int checkInternal(char* tokens[]) {
 int main(int argc, char* argv[]) {
 	char input_buffer[COMMAND_LENGTH];
 	char *tokens[NUM_TOKENS];
-	char cwd[256];
 
 	while (true) {
 		// Get command
 		// Use write because we need to use read() to work with
 		// signals, and read() is incompatible with printf().
-		if (getcwd(cwd, sizeof(cwd)) != NULL) {
-			char temp[258];
-			snprintf(temp, sizeof(temp), "%s$ ", cwd);
+		char temp[256];
+		snprintf(temp, sizeof(temp), "%s$ ", getenv("HOME"));
+		if (chdir(getenv("HOME")) != -1) {
 			write(STDOUT_FILENO, temp, strlen(temp));
-        } else {
-			write(STDERR_FILENO, "getcwd() error", strlen("getcwd() error"));
-            exit(EXIT_FAILURE);
-        }
+		} else {
+			write(STDERR_FILENO, "chdir() error\n", strlen("chdir() error\n"));
+			exit(EXIT_FAILURE);
+		}
+
 		_Bool in_background = false;
-		read_command(input_buffer, tokens, &in_background);
+		read_command(input_buffer, tokens, &in_background, false);
+
+		// Add to history
+		if (tokens[0][0] != '!') {
+			addHistory(tokens, in_background);
+		}
 
 		// DEBUG: Dump out arguments:
+		/*
 		for (int i = 0; tokens[i] != NULL; i++) {
 			write(STDOUT_FILENO, "   Token: ", strlen("   Token: "));
 			write(STDOUT_FILENO, tokens[i], strlen(tokens[i]));
 			write(STDOUT_FILENO, "\n", strlen("\n"));
 		}
 		if (in_background) {
-			write(STDOUT_FILENO, "Run in background.", strlen("Run in background."));
+			write(STDOUT_FILENO, "Run in background.\n", strlen("Run in background.\n"));
 		}
+		*/
 
 		/**
 		 * Steps For Basic Shell:
@@ -205,27 +341,7 @@ int main(int argc, char* argv[]) {
 		 */
 
 		if (checkInternal(tokens) == -1) {
-			pid_t var_pid = fork();
-
-			if(var_pid < 0) { // error
-				fprintf(stderr, "fork Failed");
-				exit(EXIT_FAILURE);
-			}
-			else if (var_pid==0) { // Child process;
-				if (execvp(tokens[0], tokens) < 0){
-					write(STDERR_FILENO, "Error type ", strlen("Error type"));
-					exit(EXIT_FAILURE);
-				}
-			}
-			else { // Parent process 
-				// Check if need to wait
-				if (!in_background) {
-					waitpid(var_pid, NULL, 0);
-				} else {
-					// Clean up zombie
-					while (waitpid(-1, NULL, WNOHANG) > 0);
-				}
-			}
+			checkExternal(tokens, in_background);
 		}
 	}
 	return 0;
