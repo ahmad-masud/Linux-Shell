@@ -71,7 +71,7 @@ ls -l
 
 - `shell.c`: Main source code for the shell.
 - `Makefile`: Build instructions for the project.
-- 
+- `test_shell.sh`: Testing file for shell.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
