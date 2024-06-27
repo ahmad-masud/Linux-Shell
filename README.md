@@ -29,20 +29,20 @@ The shell accepts user commands and executes each command in a separate process,
 ### Installation
 
 1. Clone the repository:
-    \`\`\`sh
-    git clone https://github.com/yourusername/ShellCraft.git
+    ```sh
+    git clone https://github.com/ahmad-masud/Linux-Shell
     cd ShellCraft
-    \`\`\`
+    ```
 
 2. Build the project:
-    \`\`\`sh
+    ```sh
     make
-    \`\`\`
+    ```
 
 3. Run the shell:
-    \`\`\`sh
+    ```sh
     ./shell
-    \`\`\`
+    ```
 
 ### Usage
 
@@ -53,7 +53,7 @@ The shell accepts user commands and executes each command in a separate process,
 
 ## Example
 
-\`\`\`sh
+```sh
 /home/user$ ls -l
 /home/user$ cd /usr
 /usr$ pwd
@@ -65,7 +65,7 @@ The shell accepts user commands and executes each command in a separate process,
 ...
 /usr$ !28
 ls -l
-\`\`\`
+```
 
 ## Files
 
