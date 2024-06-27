@@ -31,7 +31,7 @@ The shell accepts user commands and executes each command in a separate process,
 1. Clone the repository:
     ```sh
     git clone https://github.com/ahmad-masud/Linux-Shell
-    cd ShellCraft
+    cd Linux-Shell
     ```
 
 2. Build the project:
